@@ -3,8 +3,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.decomposition import NMF
-from .helper_functions import build_rating_matrix
-
+from .utils import build_rating_matrix
 
 def train_nmf_model(train_file, n_components=5):
     """
