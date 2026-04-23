@@ -31,7 +31,7 @@ def build_rating_matrix(train_file):
     n_movies = len(movie_map)
 
     # Build matrix Z with zeros for missing ratings
-    Z = np.zeros((n_users, n_movies), dtype=np.float32)
+    Z = np.full((n_users, n_movies), np.nan, dtype=np.float32)
     for row in df.itertuples():
         u = row.userId
         m = row.movieId
@@ -39,5 +39,9 @@ def build_rating_matrix(train_file):
         i = user_map[u]
         j = movie_map[m]
         Z[i, j] = rating
+
+    col_means = np.nanmean(Z, axis=0)
+    inds = np.where(np.isnan(Z))
+    Z[inds] = np.take(col_means, inds[1])
 
     return Z, user_map, movie_map
