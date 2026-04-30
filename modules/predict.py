@@ -29,14 +29,14 @@ def predict(test_file, model_data):
     df["rating"] = df.apply(predict_rating, axis = 1)
 
     # imputation
-    df["rating"] = df["rating"].fillna(df.groupby("movieId")["rating"].transform("mean"))
+    df["rating"] = df["rating"].fillna(df.groupby("movieId")["rating"].transform("mean")).mul(2).round().div(2)
 
-    predictions = []
-    for row in df.itertuples():
-        predictions.append({
-            "userId": row.userId,
-            "movieId": row.movieId,
-            "rating": row.rating
-        })
+  #  predictions = []
+  #  for row in df.itertuples():
+  #      predictions.append({
+  #          "userId": row.userId,
+  #          "movieId": row.movieId,
+  #          "rating": row.rating
+  #      })
 
-    return predictions
+    return df
