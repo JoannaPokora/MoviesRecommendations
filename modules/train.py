@@ -22,20 +22,27 @@ def train_nmf_model(train_file):
   """
   Z, user_map, movie_map = build_rating_matrix(train_file)
  
-  n = 1
-  error = 300
-  Z_approx = 0
-  while n < 15 and error > 250:
+  n = 3
+  Z_approx_lst = []
+  rss = []
+  while n <= 13:
     model = NMF(n_components=n, init='random', random_state=0, max_iter=1000)
     W = model.fit_transform(Z)
     H = model.components_
     Z_approx = np.dot(W, H)
-    error = np.linalg.norm(Z - Z_approx, 'fro')
-    print(error)
-    print(n)
+    Z_approx_lst.append(Z_approx)
+    rss.append(np.sum((Z - Z_approx)**2))
     n += 1
-    
-  return Z_approx, user_map, movie_map
+
+  diff = []
+  for i in range(n - 4):
+    diff.append(rss[i + 1] - rss[i])
+
+  ind_optim = np.argmin(diff)
+
+  print("r:", ind_optim + 4)
+
+  return Z_approx_lst[ind_optim], user_map, movie_map
 
 
 def train_svd1_model(train_file):
