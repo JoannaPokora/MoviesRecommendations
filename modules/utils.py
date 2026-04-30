@@ -43,10 +43,6 @@ def build_rating_matrix(train_file):
     col_means = np.nanmean(Z, axis=0)
     inds = np.where(np.isnan(Z))
     Z[inds] = np.take(col_means, inds[1])
-
-    # Jeśli po wszystkim nadal są jakieś NaN (filmy bez ani jednej oceny)
-    global_mean = np.nanmean(Z)
-    Z[np.isnan(Z)] = global_mean
-    Z = np.round(Z, 1)
+    Z = np.round(Z * 2) / 2
 
     return Z, user_map, movie_map
