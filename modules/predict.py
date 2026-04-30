@@ -4,13 +4,13 @@ import pandas as pd
 import numpy as np
 from .utils import build_rating_matrix
 
-def predict(test_file, model_data):
+def predict(model_data, test_file, output_file):
     """
     Reads a test CSV with columns: userId, movieId.
     Uses the stored Z_approx, user_map, movie_map to produce predictions.
-    Missing userId/movieId combos produce a default rating (e.g., 0 or average).
+    Missing userId/movieId pairs are given average rating of a movie.
 
-    Returns a list of dicts with keys: 'userId', 'movieId', 'rating'.
+    Writes the results to a csv file with columns: 'userId', 'movieId', 'rating'.
     """
     df = pd.read_csv(test_file)
 
@@ -29,14 +29,11 @@ def predict(test_file, model_data):
     df["rating"] = df.apply(predict_rating, axis = 1)
 
     # imputation
-    df["rating"] = df["rating"].fillna(df.groupby("movieId")["rating"].transform("mean")).mul(2).round().div(2)
+    df["rating"] = (
+        df["rating"]
+            .fillna(df.groupby("movieId")["rating"].transform("mean"))
+            .fillna(df["rating"].mean())
+            .mul(2).round().div(2)
+    )
 
-  #  predictions = []
-  #  for row in df.itertuples():
-  #      predictions.append({
-  #          "userId": row.userId,
-  #          "movieId": row.movieId,
-  #          "rating": row.rating
-  #      })
-
-    return df
+    df.to_csv(output_file, index=False)
