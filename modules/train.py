@@ -104,7 +104,7 @@ def train_svd2_model(train_file):
   return W, H
 
 
-def train_sgd_model_best_r(train_file, r_values=[5, 10, 15, 20, 25], test_size=0.1):
+def train_sgd_model_best_r(train_file, optimizer_name = "adam", r_values=[5, 10, 15, 20, 25], test_size=0.1):
     """
       Reads the ratings CSV file, split data to train and test, builds the rating matrix on training data,
       perform SGD for different values of r, computing RMSE on test data for each r, and returns the best r,
@@ -112,6 +112,7 @@ def train_sgd_model_best_r(train_file, r_values=[5, 10, 15, 20, 25], test_size=0
 
       Parameters:
         - train_file (str): Path to the training CSV file.
+        - optimizer_name (str): Word to choose the optimizer (sgd or adam).
         - r_values (list): List of r values to choose best one.
         - test_size (float): Proportion of data to split it to train and test.
 
@@ -149,7 +150,12 @@ def train_sgd_model_best_r(train_file, r_values=[5, 10, 15, 20, 25], test_size=0
         # inicjalizacja parametrów dla danego r
         W = torch.randn((n_users, r), requires_grad=True)
         H = torch.randn((r, n_movies), requires_grad=True)
-        optimizer = torch.optim.Adam([W, H], lr=0.01)  # Adam często działa lepiej niż czysty SGD
+        if optimizer_name == "adam":
+            optimizer = torch.optim.Adam([W, H], lr=0.01)
+        elif optimizer_name == "sgd":
+            optimizer = torch.optim.SGD([W, H], lr=0.01)
+        else:
+            raise ValueError("Unsupported optimizer. Choose 'sgd' or 'adam'.")
 
         for epoch in range(200):
             optimizer.zero_grad()
@@ -184,7 +190,7 @@ def train_sgd_model_best_r(train_file, r_values=[5, 10, 15, 20, 25], test_size=0
     return best_r
 
 
-def train_sgd_model(train_file, r):
+def train_sgd_model(train_file, optimizer_name = "adam", r):
     # Używamy wersji SGD, która pozostawia NaN
     Z, user_map, movie_map = build_rating_matrix_sgd(train_file)
     Z_torch = torch.from_numpy(Z)
@@ -194,7 +200,12 @@ def train_sgd_model(train_file, r):
 
     W = torch.randn((n_users, r), requires_grad=True)
     H = torch.randn((r, n_movies), requires_grad=True)
-    optimizer = torch.optim.SGD([W, H], lr=0.01)
+    if optimizer_name == "adam":
+        optimizer = torch.optim.Adam([W, H], lr=0.01)
+    elif optimizer_name == "sgd":
+        optimizer = torch.optim.SGD([W, H], lr=0.01)
+    else:
+        raise ValueError("Unsupported optimizer. Choose 'sgd' or 'adam'.")
 
     for epoch in range(1000):
         optimizer.zero_grad()
