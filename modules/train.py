@@ -6,6 +6,7 @@ from sklearn.decomposition import NMF, TruncatedSVD
 from .utils import build_rating_matrix
 from .utils import build_rating_matrix_sgd
 import torch
+import pickle
 
 def train(train_file, model_path, method):
   r"""
@@ -13,19 +14,19 @@ def train(train_file, model_path, method):
   in the model_path directory.
   """
 
-  Z, user_map, movie_map = build_rating_matrix(train_file, self.method)
+  Z, user_map, movie_map = build_rating_matrix(train_file, method)
 
   match method:
     case NMF:
-      self.W, self.H = train_nmf_model(Z, user_map, movie_map)
+      W, H = train_nmf_model(Z, user_map, movie_map)
     case SVD1:
-      self.W, self.H = train_svd1_model(Z, user_map, movie_map)
+      W, H = train_svd1_model(Z, user_map, movie_map)
     case SVD2:
-      self.W, self.H = train_svd2_model(Z, user_map, movie_map)
+      W, H = train_svd2_model(Z, user_map, movie_map)
     case SGD:
-      self.W, self.H = train_sgd_model(Z, user_map, movie_map)
+      W, H = train_sgd_model(Z, user_map, movie_map)
         
-  Z_approx = np.dot(self.W, self.H)
+  Z_approx = np.dot(W, H)
 
   pickle.dump([Z_approx, user_map, movie_map], open(model_path, 'wb'))
   print("Model saved to", model_path)
