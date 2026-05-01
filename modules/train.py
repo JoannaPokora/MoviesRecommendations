@@ -4,7 +4,6 @@ import pandas as pd
 import numpy as np
 from sklearn.decomposition import NMF, TruncatedSVD
 from .utils import build_rating_matrix
-from .utils import build_rating_matrix_sgd
 import torch
 import pickle
 
@@ -17,14 +16,16 @@ def train(train_file, model_path, method):
   Z, user_map, movie_map = build_rating_matrix(train_file, method)
 
   match method:
-    case NMF:
-      W, H = train_nmf_model(Z, user_map, movie_map)
-    case SVD1:
-      W, H = train_svd1_model(Z, user_map, movie_map)
-    case SVD2:
-      W, H = train_svd2_model(Z, user_map, movie_map)
-    case SGD:
-      W, H = train_sgd_model(Z, user_map, movie_map)
+    case "NMF":
+      W, H = train_nmf_model(Z)
+    case "SVD1":
+      W, H = train_svd1_model(Z)
+    case "SVD2":
+      W, H = train_svd2_model(Z)
+    case "SGD_a":
+      W, H = train_sgd_model(Z, optimizer_name="adam", r=3)
+    case "SGD_s":
+      W, H = train_sgd_model(Z, optimizer_name="sgd", r=1)
         
   Z_approx = np.dot(W, H)
 
@@ -86,24 +87,25 @@ def train_svd1_model(Z):
   return W, H
 
 
-def train_svd2_model(train_file):
-  svd = TruncatedSVD(n_components=min(Z.shape)-1, random_state=42)
-  svd.fit(Z)
+def train_svd2_model(Z):
+    svd = TruncatedSVD(n_components=min(Z.shape) - 1, random_state=42)
+    svd.fit(Z)
 
-  var_expl = np.cumsum(svd.explained_variance_ratio_)
-  r = np.argmin(var_expl >= 0.90) + 1
-  print("Rank (r):", r)
+    var_expl = np.cumsum(svd.explained_variance_ratio_)
+    r = np.argmin(var_expl >= 0.90) + 1
+    print("Rank (r):", r)
 
-  svd = TruncatedSVD(n_components=r, random_state=42)
-  svd.fit(Z)
-  
-  Sigma2 = np.diag(svd.singular_values_)
-  VT = svd . components_
-  W = svd.transform(Z) / Sigma2
-  H = np.dot(Sigma2, VT)
-    
-  return W, H
+    svd = TruncatedSVD(n_components=r, random_state=42)
+    svd.fit(Z)
 
+    U = svd.transform(Z) / svd.singular_values_
+    sqrt_lambda = np.diag(np.sqrt(svd.singular_values_))
+    VT = svd.components_
+
+    W = np.dot(U, sqrt_lambda)  # W = U * sqrt(Lambda)
+    H = np.dot(sqrt_lambda, VT)  # H = sqrt(Lambda) * V^T
+
+    return W, H
 
 def train_sgd_model_best_r(train_file, optimizer_name = "adam", r_values=[1, 5, 10, 15, 20, 30, 40, 50, 100], test_size=0.1):
     """
@@ -191,9 +193,7 @@ def train_sgd_model_best_r(train_file, optimizer_name = "adam", r_values=[1, 5, 
     return best_r
 
 
-def train_sgd_model(train_file, optimizer_name = "adam", r=1):
-    # Używamy wersji SGD, która pozostawia NaN
-    Z, user_map, movie_map = build_rating_matrix_sgd(train_file)
+def train_sgd_model(Z, optimizer_name = "adam", r=3):
     Z_torch = torch.from_numpy(Z)
     n_users, n_movies = Z_torch.shape
 
@@ -216,7 +216,5 @@ def train_sgd_model(train_file, optimizer_name = "adam", r=1):
         optimizer.step()
 
 
-    Z_approx = torch.matmul(W, H).detach().numpy()
-
-    return Z_approx, user_map, movie_map
+    return W.detach().numpy(), H.detach().numpy()
 
