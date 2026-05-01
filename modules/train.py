@@ -104,7 +104,7 @@ def train_svd2_model(train_file):
   return Z_approx, user_map, movie_map
 
 
-def train_sgd_model_best_r(train_file, optimizer_name = "adam", r_values=[5, 10, 15, 20, 25], test_size=0.1):
+def train_sgd_model_best_r(train_file, optimizer_name = "adam", r_values=[1, 5, 10, 15, 20, 30, 40, 50, 100], test_size=0.1):
     """
       Reads the ratings CSV file, split data to train and test, builds the rating matrix on training data,
       perform SGD for different values of r, computing RMSE on test data for each r, and returns the best r,
@@ -177,7 +177,7 @@ def train_sgd_model_best_r(train_file, optimizer_name = "adam", r_values=[5, 10,
 
             # obliczamy RMSE dla zestawu testowego
             current_test_rmse = np.sqrt(np.mean(test_errors))
-            print(f"Walidacyjne RMSE dla r={r}: {current_test_rmse:.4f}")
+            print(f"Testowe RMSE dla r={r}: {current_test_rmse:.4f}")
 
             # jeśli to r jest lepsze od poprzednich, zapisujemy wynik
             if current_test_rmse < lowest_test_rmse:
@@ -190,7 +190,7 @@ def train_sgd_model_best_r(train_file, optimizer_name = "adam", r_values=[5, 10,
     return best_r
 
 
-def train_sgd_model(train_file, optimizer_name = "adam", r):
+def train_sgd_model(train_file, optimizer_name = "adam", r=1):
     # Używamy wersji SGD, która pozostawia NaN
     Z_torch, user_map, movie_map = build_rating_matrix_sgd(train_file)
     n_users, n_movies = Z_torch.shape
