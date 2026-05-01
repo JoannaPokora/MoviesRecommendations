@@ -7,101 +7,101 @@ from .utils import build_rating_matrix
 from .utils import build_rating_matrix_sgd
 import torch
 
-def train_nmf_model(train_file):
+def train(train_file, model_path, method):
+  r"""
+  Train the model and store it as an .pkl file
+  in the model_path directory.
+  """
+
+  Z, user_map, movie_map = build_rating_matrix(train_file, self.method)
+
+  match method:
+    case NMF:
+      self.W, self.H = train_nmf_model(Z, user_map, movie_map)
+    case SVD1:
+      self.W, self.H = train_svd1_model(Z, user_map, movie_map)
+    case SVD2:
+      self.W, self.H = train_svd2_model(Z, user_map, movie_map)
+    case SGD:
+      self.W, self.H = train_sgd_model(Z, user_map, movie_map)
+        
+  Z_approx = np.dot(self.W, self.H)
+
+  pickle.dump([Z_approx, user_map, movie_map], open(model_path, 'wb'))
+  print("Model saved to", model_path)
+
+def train_nmf_model(Z):
   """
   Reads the ratings CSV file, builds the rating matrix using build_rating_matrix,
   performs NMF, and returns the approximated rating matrix along with mappings.
 
   Parameters:
-    - train_file (str): Path to the training CSV file.
+    - Z (ndarray): Imputed data matrix.
 
   Returns:
-    - Z_approx (ndarray): Approximated rating matrix from NMF.
-    - user_map (dict): Mapping from userId to row index.
-    - movie_map (dict): Mapping from movieId to column index.
+    - W (ndarray): Matrix of size n x r.
+    - H (dict): Matrix of size r x d.
   """
-  Z, user_map, movie_map = build_rating_matrix(train_file)
  
-  n = 3
-  Z_approx_lst = []
+  r = 3
+  WH_lst = []
   rss = []
-  while n <= 13:
-    model = NMF(n_components=n, init='random', random_state=0, max_iter=1000)
+  while r <= 13:
+    model = NMF(n_components=r, init='random', random_state=0, max_iter=1000)
     W = model.fit_transform(Z)
     H = model.components_
     Z_approx = np.dot(W, H)
-    Z_approx_lst.append(Z_approx)
+    WH_lst.append([W, H])
     rss.append(np.sum((Z - Z_approx)**2))
-    n += 1
+    r += 1
 
   diff = []
-  for i in range(n - 4):
+  for i in range(r - 4):
     diff.append(rss[i + 1] - rss[i])
 
   ind_optim = np.argmin(diff)
 
-  print("r:", ind_optim + 4)
+  print("Rank (r):", ind_optim + 4)
 
-  return Z_approx_lst[ind_optim], user_map, movie_map
+  return WH_lst[ind_optim][1], WH_lst[ind_optim][2]
 
 
-def train_svd1_model(train_file):
-  Z, user_map, movie_map = build_rating_matrix(train_file)
+def train_svd1_model(Z):
+  svd = TruncatedSVD(n_components=min(Z.shape)-1, random_state=42)
+  svd.fit(Z)
 
-  svd_100_comp = TruncatedSVD(n_components=100, random_state=42)
-  svd_100_comp.fit(Z)
-  Sigma2 = np.diag(svd_100_comp.singular_values_)
-  VT = svd_100_comp.components_
-  W = svd_100_comp.transform(Z) / svd_100_comp.singular_values_
+  var_expl = np.cumsum(svd.explained_variance_ratio_)
+  r = np.argmin(var_expl >= 0.90) + 1
+  print("Rank (r):", r)
+
+  svd = TruncatedSVD(n_components=r, random_state=42)
+  svd.fit(Z)
+
+  Sigma2 = np.diag(svd.singular_values_)
+  VT = svd . components_
+  W = svd.transform(Z) / Sigma2
   H = np.dot(Sigma2, VT)
-  Z_approx = np.dot(W, H)
-  cum_var_explained = np.cumsum(svd_100_comp.explained_variance_)
-
-  if(any(cum_var_explained >= 90)):
-    n = np.argwhere(cum_var_explained >= 2)[0, 0]
-    if(n == 100):
-      return Z_approx, user_map, movie_map
-  else:
-    n = 101
-  
-  var_explained = 0
-  Z_approx = 0
-  while var_explained < 90:
-    svd = TruncatedSVD(n_components=n, random_state=42)
-    svd.fit(Z)
-    Sigma2 = np.diag(svd.singular_values_)
-    VT = svd.components_
-    W = svd.transform(Z) / svd.singular_values_
-    H = np.dot(Sigma2, VT)
-    Z_approx = np.dot(W, H)
-    error = np.sum(svd.explained_variance_)
-    print(error)
-    print(n)
-    n += 1
     
-  return Z_approx, user_map, movie_map
+  return W, H
 
 
 def train_svd2_model(train_file):
-  Z, user_map, movie_map = build_rating_matrix(train_file)
+  svd = TruncatedSVD(n_components=min(Z.shape)-1, random_state=42)
+  svd.fit(Z)
 
-  n = 1
-  error = 300
-  Z_approx = 0
-  while n <= 15 and error > 250:
-    svd = TruncatedSVD(n_components=n, random_state=42)
-    svd.fit(Z)
-    Sigma2 = np.diag(svd.singular_values_)
-    VT = svd.components_
-    W = svd.transform(Z) / svd.singular_values_
-    H = np.dot(Sigma2, VT)
-    Z_approx = np.dot(W, H)
-    error = np.linalg.norm(Z - Z_approx, 'fro')
-    print(error)
-    print(n)
-    n += 1
+  var_expl = np.cumsum(svd.explained_variance_ratio_)
+  r = np.argmin(var_expl >= 0.90) + 1
+  print("Rank (r):", r)
+
+  svd = TruncatedSVD(n_components=r, random_state=42)
+  svd.fit(Z)
+  
+  Sigma2 = np.diag(svd.singular_values_)
+  VT = svd . components_
+  W = svd.transform(Z) / Sigma2
+  H = np.dot(Sigma2, VT)
     
-  return Z_approx, user_map, movie_map
+  return W, H
 
 
 def train_sgd_model_best_r(train_file, r_values=[5, 10, 15, 20, 25], test_size=0.1):
@@ -186,7 +186,8 @@ def train_sgd_model_best_r(train_file, r_values=[5, 10, 15, 20, 25], test_size=0
 
 def train_sgd_model(train_file, r):
     # Używamy wersji SGD, która pozostawia NaN
-    Z_torch, user_map, movie_map = build_rating_matrix_sgd(train_file)
+    Z, user_map, movie_map = build_rating_matrix_sgd(train_file)
+    Z_torch = torch.from_numpy(Z)
     n_users, n_movies = Z_torch.shape
 
     mask = ~torch.isnan(Z_torch)  # Maska dla znanych ocen
