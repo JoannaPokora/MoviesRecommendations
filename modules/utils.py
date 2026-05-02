@@ -44,7 +44,7 @@ def build_rating_matrix(train_file, method):
         j = movie_map[m]
         Z[i, j] = rating
 
-    if method in ["nmf", "svd1"]:
+    if method in ["NMF", "SVD1"]:
       # impute missing values with means of movies ratings
       col_means = np.nanmean(Z, axis=0)
       inds = np.where(np.isnan(Z))
