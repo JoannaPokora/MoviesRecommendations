@@ -71,15 +71,15 @@ def train_svd1_model(Z):
   svd.fit(Z)
 
   var_expl = np.cumsum(svd.explained_variance_ratio_)
-  r = np.argmin(var_expl >= 0.90) + 1
+  r = np.argmax(var_expl >= 0.9) + 1
   print("Rank (r):", r)
 
-  svd = TruncatedSVD(n_components=r, random_state=42)
-  svd.fit(Z)
+  svd_opt = TruncatedSVD(n_components=r, random_state=42)
+  svd_opt.fit(Z)
 
-  Sigma2 = np.diag(svd.singular_values_)
-  VT = svd.components_
-  W = svd.transform(Z) / Sigma2
+  Sigma2 = np.diag(svd_opt.singular_values_)
+  VT = svd_opt.components_
+  W = svd_opt.transform(Z) / svd_opt.singular_values_
   H = np.dot(Sigma2, VT)
     
   return W, H
