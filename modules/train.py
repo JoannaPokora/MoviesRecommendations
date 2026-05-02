@@ -59,11 +59,11 @@ def train_nmf_model(Z):
   for i in range(r - 4):
     diff.append(rss[i + 1] - rss[i])
 
-  ind_optim = np.argmin(diff)
+  ind_optim = np.argmin(diff) + 1
 
-  print("Rank (r):", ind_optim + 4)
+  print("Rank (r):", ind_optim + 3)
 
-  return WH_lst[ind_optim][1], WH_lst[ind_optim][2]
+  return WH_lst[ind_optim][0], WH_lst[ind_optim][1]
 
 
 def train_svd1_model(Z):
