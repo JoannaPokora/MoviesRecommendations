@@ -5,9 +5,8 @@ import numpy as np
 from sklearn.decomposition import NMF, TruncatedSVD
 from .utils import build_rating_matrix
 import torch
-import pickle
 
-def train(train_file, model_path, method):
+def train(train_file, method):
   """
   Train the model and store it as an .pkl file
   in the model_path directory.
@@ -29,8 +28,7 @@ def train(train_file, model_path, method):
         
   Z_approx = np.dot(W, H)
 
-  pickle.dump([Z_approx, user_map, movie_map], open(model_path, 'wb'))
-  print("Model saved to", model_path)
+  return Z_approx, user_map, movie_map
 
 def train_nmf_model(Z):
   """

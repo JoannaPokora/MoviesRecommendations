@@ -2,9 +2,8 @@
 
 import pandas as pd
 import numpy as np
-from .utils import build_rating_matrix
 
-def predict(model_data, test_file, output_file):
+def predict(test_file, model_data):
     """
     Reads a test CSV with columns: userId, movieId.
     Uses the stored Z_approx, user_map, movie_map to produce predictions.
@@ -35,7 +34,5 @@ def predict(model_data, test_file, output_file):
             .fillna(df["rating"].mean()) #jeśli nie mamy ocen do danego filmu, bierzemy średnią globalną
             .mul(2).round().div(2) #przybliżenie do 0.5
     )
-
-    df.to_csv(output_file, index=False)
 
     return df
