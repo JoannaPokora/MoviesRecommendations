@@ -9,7 +9,7 @@ import torch
 import pickle
 
 def train(train_file, model_path, method):
-  r"""
+  """
   Train the model and store it as an .pkl file
   in the model_path directory.
   """
@@ -18,11 +18,11 @@ def train(train_file, model_path, method):
 
   match method:
     case NMF:
-      W, H = train_nmf_model(Z, user_map, movie_map)
+      W, H = train_nmf_model(Z)
     case SVD1:
-      W, H = train_svd1_model(Z, user_map, movie_map)
+      W, H = train_svd1_model(Z)
     case SVD2:
-      W, H = train_svd2_model(Z, user_map, movie_map)
+      W, H = train_svd2_model(Z)
     case SGD:
       W, H = train_sgd_model(Z, user_map, movie_map)
         
@@ -79,14 +79,16 @@ def train_svd1_model(Z):
   svd.fit(Z)
 
   Sigma2 = np.diag(svd.singular_values_)
-  VT = svd . components_
+  VT = svd.components_
   W = svd.transform(Z) / Sigma2
   H = np.dot(Sigma2, VT)
     
   return W, H
 
 
-def train_svd2_model(train_file):
+def train_svd2_model(Z):
+  Z = Z.fillna(0)
+
   svd = TruncatedSVD(n_components=min(Z.shape)-1, random_state=42)
   svd.fit(Z)
 
@@ -98,7 +100,7 @@ def train_svd2_model(train_file):
   svd.fit(Z)
   
   Sigma2 = np.diag(svd.singular_values_)
-  VT = svd . components_
+  VT = svd.components_
   W = svd.transform(Z) / Sigma2
   H = np.dot(Sigma2, VT)
     
