@@ -56,7 +56,7 @@ def main():
     mode = args.mode.lower()
     alg = args.alg.upper()
 
-    if alg in ["NMF", "SVD1", "SVD2", "SGD", "BEST"]:
+    if alg not in ["NMF", "SVD1", "SVD2", "SGD", "BEST"]:
         print("--alg must be one of: NMF, SVD1, SVD2, SGD, BEST")
         return
 
@@ -94,8 +94,8 @@ def main():
 
         with open(args.output_file, "w") as f:
             f.write("userId,movieId,rating\n")
-            for row in predictions:
-                f.write(f"{row['userId']},{row['movieId']},{row['rating']}\n")
+            for row in predictions.itertuples():
+                f.write(f"{row.userId},{row.movieId},{row.rating}\n")
 
         print(f"Predictions saved to {args.output_file}.")
 
