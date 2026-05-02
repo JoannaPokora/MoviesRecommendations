@@ -13,12 +13,14 @@ def predict(test_file, model_data):
     """
     df = pd.read_csv(test_file)
 
-    Z_approx, user_map, movie_map = model_data
+    Z_approx = model_data["Z_approx"]
+    user_map = model_data["user_map"]
+    movie_map = model_data["movie_map"]
 
     def predict_rating(row):
         u = row.userId
         m = row.movieId
-        if u in user_map and m in movie_map:
+        if u in user_map.keys() and m in movie_map.keys():
             i = user_map[u]
             j = movie_map[m]
             return Z_approx[i, j]
