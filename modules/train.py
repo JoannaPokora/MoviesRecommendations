@@ -21,7 +21,7 @@ def train(train_file, method):
       W, H = train_svd1_model(Z)
     case "SVD2":
       W, H = train_svd2_model(Z)
-    case "SGD_a":
+    case "SGD":
       W, H = train_sgd_model(Z, optimizer_name="adam", r=3)
     case "SGD_s":
       W, H = train_sgd_model(Z, optimizer_name="sgd", r=1)
@@ -105,44 +105,44 @@ def train_svd2_model(Z):
 
     return W, H
 
-def train_sgd_model_best_r(train_file, optimizer_name = "adam", r_values=[1, 5, 10, 15, 20, 30, 40, 50, 100], test_size=0.1):
+def train_sgd_model_best_r(Z, optimizer_name = "adam", r_values=list(range(1,21)), test_size=0.1):
     """
-      Reads the ratings CSV file, split data to train and test, builds the rating matrix on training data,
+      Take Z, split data to train and test, builds the new rating matrix on training data,
       perform SGD for different values of r, computing RMSE on test data for each r, and returns the best r,
       which minimalize RMSE.
 
       Parameters:
-        - train_file (str): Path to the training CSV file.
+        - Z: Matrix with missing values as NaN.
         - optimizer_name (str): Word to choose the optimizer (sgd or adam).
-        - r_values (list): List of r values to choose best one.
+        - r_values (list[int]): List of r values to choose best one.
         - test_size (float): Proportion of data to split it to train and test.
 
       Returns:
         - best_r (int): Value r, which minimalize RMSE on test data.
+
       """
 
-    df = pd.read_csv(train_file)
-    user_map = {uid: i for i, uid in enumerate(sorted(df["userId"].unique()))}
-    movie_map = {mid: j for j, mid in enumerate(sorted(df["movieId"].unique()))}
-
+    known_u_idx, known_m_idx = np.where(~np.isnan(Z))
+    n_samples = len(known_u_idx)
     # podział danych na treningowe i testowe
-    df_shuffled = df.sample(frac=1, random_state=42) #losujemy dane
-    split_idx = int(len(df_shuffled) * (1 - test_size)) #dzielimy na 0.9 i 0.1 danych
-    df_train_split = df_shuffled.iloc[:split_idx] #0.9 danych do trenowania
-    df_test_split = df_shuffled.iloc[split_idx:] #0.1 danych do sprawdzania
+    indices = np.arange(n_samples)
+    np.random.seed(42)
+    np.random.shuffle(indices)
+    split_idx = int(n_samples * (1 - test_size))  # dzielimy na 0.9 i 0.1 danych
+    train_indices = indices[:split_idx] #0.9 danych do trenowania
+    test_indices = indices[split_idx:] #0.1 danych do sprawdzania
 
-    # macierz treningową Z (z nan tam, gdzie nie ma ocen lub są w zestawie testowym)
-    n_users, n_movies = len(user_map), len(movie_map)
-    Z_train = np.full((n_users, n_movies), np.nan, dtype=np.float32)
-    for row in df_train_split.itertuples():
-        Z_train[user_map[row.userId], movie_map[row.movieId]] = row.rating
+    # tworzymy macierz treningową Z
+    Z_train = Z.copy()
+    for idx in test_indices:
+        Z_train[known_u_idx[idx], known_m_idx[idx]] = np.nan
 
-    Z_train_torch = torch.from_numpy(Z_train)
+    Z_train_torch = torch.from_numpy(Z_train).float()
     mask_train = ~torch.isnan(Z_train_torch)
 
+    n_users, n_movies = Z.shape
     best_r = r_values[0]
     lowest_test_rmse = float('inf')
-    best_Z_approx = None
 
     # szukamy best_r, by znaleźć tę z najniższym RMSE
     for r in r_values:
@@ -170,10 +170,11 @@ def train_sgd_model_best_r(train_file, optimizer_name = "adam", r_values=[1, 5, 
         with torch.no_grad():
             Z_approx_np = torch.matmul(W, H).numpy()
             test_errors = []
-            for row in df_test_split.itertuples():
-                u_idx, m_idx = user_map[row.userId], movie_map[row.movieId]
-                predicted = Z_approx_np[u_idx, m_idx]
-                actual = row.rating
+            for idx in test_indices:
+                u = known_u_idx[idx]
+                m = known_m_idx[idx]
+                actual = Z[u, m]
+                predicted = Z_approx_np[u, m]
                 test_errors.append((predicted - actual) ** 2)
 
             # obliczamy RMSE dla zestawu testowego
@@ -192,6 +193,7 @@ def train_sgd_model_best_r(train_file, optimizer_name = "adam", r_values=[1, 5, 
 
 
 def train_sgd_model(Z, optimizer_name = "adam", r=3):
+    r = train_sgd_model_best_r(Z, optimizer_name=optimizer_name)
     Z_torch = torch.from_numpy(Z)
     n_users, n_movies = Z_torch.shape
 
