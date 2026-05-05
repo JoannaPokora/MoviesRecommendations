@@ -84,24 +84,41 @@ def train_svd1_model(Z):
     
   return W, H
 
+def train_svd2_model(Z, max_iter=5, tol=1e-3):
+    Z_current = Z.copy()
 
-def train_svd2_model(Z):
-    svd = TruncatedSVD(n_components=min(Z.shape) - 1, random_state=42)
-    svd.fit(Z)
+    svd_init = TruncatedSVD(n_components=min(Z.shape) - 1, random_state=42)
+    svd_init.fit(Z)
 
-    var_expl = np.cumsum(svd.explained_variance_ratio_)
-    r = np.argmin(var_expl >= 0.90) + 1
+    var_expl = np.cumsum(svd_init.explained_variance_ratio_)
+    r = np.argmin(var_expl >= 0.9) + 1
     print("Rank (r):", r)
 
-    svd = TruncatedSVD(n_components=r, random_state=42)
-    svd.fit(Z)
+    # zapamiętujemy, gdzie były oryginalne oceny (większe od 0)
+    mask = Z > 0
 
-    U = svd.transform(Z) / svd.singular_values_
+    for i in range(max_iter):
+        svd = TruncatedSVD(n_components=r, random_state=42)
+        W_iter = svd.fit_transform(Z_current)
+        H_iter = svd.components_
+
+        Z_pred = np.dot(W_iter, H_iter)
+
+        # obliczamy zmianę (czy zbiegamy do punktu stałego)
+        diff = np.linalg.norm(Z_current - Z_pred)
+
+        # Zostawiamy oryginalne oceny, w resztę (braki) wstawiamy przewidywania
+        Z_current[~mask] = Z_pred[~mask]
+
+        if diff < tol:
+            break
+
+    U = svd.transform(Z_current) / svd.singular_values_
     sqrt_lambda = np.diag(np.sqrt(svd.singular_values_))
     VT = svd.components_
 
-    W = np.dot(U, sqrt_lambda)  # W = U * sqrt(Lambda)
-    H = np.dot(sqrt_lambda, VT)  # H = sqrt(Lambda) * V^T
+    W = np.dot(U, sqrt_lambda)
+    H = np.dot(sqrt_lambda, VT)
 
     return W, H
 

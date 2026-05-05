@@ -49,6 +49,9 @@ def build_rating_matrix(train_file, method):
       col_means = np.nanmean(Z, axis=0)
       inds = np.where(np.isnan(Z))
       Z[inds] = np.take(col_means, inds[1])
+    elif method in ["SVD2"]:
+      # impute missing values with zeros
+      Z[np.isnan(Z)] = 0
 
     # round Z entries to nearest 0.5  
     Z = np.round(Z * 2) / 2
