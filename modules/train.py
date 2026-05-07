@@ -3,8 +3,9 @@
 import pandas as pd
 import numpy as np
 from sklearn.decomposition import NMF, TruncatedSVD
-from .utils import build_rating_matrix
+from .utils import build_rating_matrix, create_cv_folds, evaluate_fold
 import torch
+from rich.progress import Progress
 
 def train(train_file, method):
   """
@@ -12,25 +13,65 @@ def train(train_file, method):
   in the model_path directory.
   """
 
-  Z, user_map, movie_map = build_rating_matrix(train_file, method)
+  df = pd.read_csv(train_file)
 
   match method:
     case "NMF":
-      W, H = train_nmf_model(Z)
+      min_r=5
+      max_r=30
+      n_folds = 3
     case "SVD1":
-      W, H = train_svd1_model(Z)
+      min_r=5
+      max_r=30
+      n_folds = 3
     case "SVD2":
-      W, H = train_svd2_model(Z)
+      min_r=5
+      max_r=30
+      n_folds = 3
     case "SGD":
-      W, H = train_sgd_model(Z, optimizer_name="adam", r=3)
-    case "SGD_s":
-      W, H = train_sgd_model(Z, optimizer_name="sgd", r=1)
-        
+      min_r=5
+      max_r=30
+      n_folds = 3
+
+  train_fun = globals()[f"train_{method}_model"] # tu określamy funkcję modelu
+
+  folds = create_cv_folds(df, n_folds, method) # tu tworzymy foldy
+
+  rs = range(min_r, max_r + 1)
+  rmse = {}
+
+  with Progress() as p:
+    t = p.add_task(description = "initialization", total=len(rs), visible=False)
+    for r in rs: # tu sprawdzamy dla każdego r
+      p.update(t, description=f"r = {r}", refresh=True, visible=True)
+      r_rmse = []
+      for fold in folds: # tu sprawdzamy po wszystkich foldach
+        p.update(t, advance=1/len(folds)*100)
+        Z_train = fold['Z_train']
+        train_user_map = fold['user_map']
+        train_movie_map = fold['movie_map']
+        test_df = fold['test_df']
+
+        train_W, train_H = train_fun(Z_train, r) # tu dopasowujemy model na train
+
+        # tu obliczamy i dodajemy rmse dla foldu
+        r_rmse.append(evaluate_fold(test_df, train_user_map, train_movie_map, train_W, train_H))
+      
+      # tu dodajemy srednie rmse dla r
+      rmse[r] = np.mean(r_rmse)
+
+  min_rmse = min(rmse.values())
+  best_r = list(rmse.keys)[list(rmse.values()).index(min_rmse)]
+  print(f"Best r = {best_r} with RMSE = {min_rmse:.4f}")
+
+  Z, user_map, movie_map = build_rating_matrix(df, method)
+
+  W, H = train_fun(Z, best_r)
   Z_approx = np.dot(W, H)
 
   return Z_approx, user_map, movie_map
 
-def train_nmf_model(Z):
+def train_NMF_model(Z, r):
   """
   Reads the ratings CSV file, builds the rating matrix using build_rating_matrix,
   performs NMF, and returns the approximated rating matrix along with mappings.
@@ -42,31 +83,15 @@ def train_nmf_model(Z):
     - W (ndarray): Matrix of size n x r.
     - H (dict): Matrix of size r x d.
   """
- 
-  r = 3
-  WH_lst = []
-  rss = []
-  while r <= 13:
-    model = NMF(n_components=r, init='random', random_state=0, max_iter=1000)
-    W = model.fit_transform(Z)
-    H = model.components_
-    Z_approx = np.dot(W, H)
-    WH_lst.append([W, H])
-    rss.append(np.sum((Z - Z_approx)**2))
-    r += 1
+        
+  model = NMF(n_components=r, init='random', random_state=0, max_iter=1000)
+  W = model.fit_transform(Z)
+  H = model.components_
 
-  diff = []
-  for i in range(r - 4):
-    diff.append(rss[i + 1] - rss[i])
-
-  ind_optim = np.argmin(diff) + 1
-
-  print("Rank (r):", ind_optim + 3)
-
-  return WH_lst[ind_optim][0], WH_lst[ind_optim][1]
+  return W, H
 
 
-def train_svd1_model(Z):
+def train_SVD1_model(df, Z):
   svd = TruncatedSVD(n_components=min(Z.shape)-1, random_state=42)
   svd.fit(Z)
 
@@ -84,7 +109,7 @@ def train_svd1_model(Z):
     
   return W, H
 
-def train_svd2_model(Z, max_iter=5, tol=1e-3):
+def train_SVD2_model(df, Z, max_iter=5, tol=1e-3):
     Z_current = Z.copy()
 
     svd_init = TruncatedSVD(n_components=min(Z.shape) - 1, random_state=42)
@@ -122,7 +147,7 @@ def train_svd2_model(Z, max_iter=5, tol=1e-3):
 
     return W, H
 
-def train_sgd_model_best_r(Z, optimizer_name = "adam", r_values=list(range(1,21)), test_size=0.1):
+def train_SGD_model(df, Z, optimizer_name = "adam", r_values=list(range(1,50)), test_size=0.1):
     """
       Take Z, split data to train and test, builds the new rating matrix on training data,
       perform SGD for different values of r, computing RMSE on test data for each r, and returns the best r,
@@ -151,7 +176,7 @@ def train_sgd_model_best_r(Z, optimizer_name = "adam", r_values=list(range(1,21)
 
     # tworzymy macierz treningową Z
     Z_train = Z.copy()
-    for idx in test_indices:
+    for idx in train_indices:
         Z_train[known_u_idx[idx], known_m_idx[idx]] = np.nan
 
     Z_train_torch = torch.from_numpy(Z_train).float()
@@ -209,7 +234,7 @@ def train_sgd_model_best_r(Z, optimizer_name = "adam", r_values=list(range(1,21)
     return best_r
 
 
-def train_sgd_model(Z, optimizer_name = "adam", r=3):
+#def train_sgd_model(df, Z, optimizer_name = "adam", r=3):
     r = train_sgd_model_best_r(Z, optimizer_name=optimizer_name)
     Z_torch = torch.from_numpy(Z)
     n_users, n_movies = Z_torch.shape

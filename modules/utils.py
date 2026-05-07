@@ -2,9 +2,11 @@
 
 import pandas as pd
 import numpy as np
-import torch
+from sklearn.model_selection import KFold
+from .predict import predict
+from sklearn.metrics import mean_squared_error
 
-def build_rating_matrix(train_file, method):
+def build_rating_matrix(df, method):
     """
     Reads a ratings CSV file with columns: userId, movieId, rating.
     Builds and returns the user–movie matrix Z, along with mappings
@@ -21,7 +23,6 @@ def build_rating_matrix(train_file, method):
       - user_map (dict): Mapping from userId to row index.
       - movie_map (dict): Mapping from movieId to column index.
     """
-    df = pd.read_csv(train_file)
 
     # Extract unique users and movies
     unique_users = df["userId"].unique()
@@ -57,3 +58,35 @@ def build_rating_matrix(train_file, method):
     Z = np.round(Z * 2) / 2
 
     return Z, user_map, movie_map
+
+def create_cv_folds(df, n_splits, method):
+  kf = KFold(n_splits, shuffle=True, random_state=42)
+
+  folds = []
+
+  for fold, (train_ind, test_ind) in enumerate(kf.split(df)):
+    train_df = df.iloc[train_ind]
+    test_df = df.iloc[test_ind]
+    
+    Z_train, user_map, movie_map = build_rating_matrix(train_df, method)
+    
+    folds.append({
+        'fold_idx': fold + 1,
+        'test_df': test_df, 
+        'Z_train': Z_train,
+        'user_map': user_map,
+        'movie_map': movie_map
+    })
+
+  return folds
+
+def evaluate_fold(test_df, user_map, movie_map, W, H):
+  Z_approx = np.dot(W, H)
+        
+  test_preds = test_df[["userId", "movieId"]].copy()
+  test_preds = predict(df=test_preds,
+                       model_data = {"Z_approx": Z_approx,
+                                     "user_map": user_map,
+                                     "movie_map": movie_map})
+        
+  return np.sqrt(mean_squared_error(test_df["rating"], test_preds["rating"]))
