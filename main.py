@@ -9,6 +9,8 @@ from modules.predict import predict
 '''
 Example usage:
 
+conda activate my_ml_project_env
+
 (a) Training the model:
 python main.py --mode train
 --train_file data/ratings.csv
