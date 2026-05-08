@@ -80,9 +80,7 @@ def create_cv_folds(df, n_splits, method):
 
   return folds
 
-def evaluate_fold(test_df, user_map, movie_map, W, H):
-  Z_approx = np.dot(W, H)
-        
+def evaluate_fold(test_df, user_map, movie_map, Z_approx):
   test_preds = test_df[["userId", "movieId"]].copy()
   test_preds = predict(df=test_preds,
                        model_data = {"Z_approx": Z_approx,
