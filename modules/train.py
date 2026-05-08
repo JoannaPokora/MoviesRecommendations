@@ -6,6 +6,8 @@ from sklearn.decomposition import NMF, TruncatedSVD
 from .utils import build_rating_matrix, create_cv_folds, evaluate_fold
 import torch
 from rich.progress import Progress
+import warnings
+from sklearn.exceptions import ConvergenceWarning
 
 def train(train_file, method):
   """
@@ -21,12 +23,12 @@ def train(train_file, method):
       max_r=30
       n_folds = 3
     case "SVD1":
-      min_r=5
-      max_r=30
-      n_folds = 3
+      min_r=10
+      max_r=40
+      n_folds = 5
     case "SVD2":
       min_r=5
-      max_r=30
+      max_r=10
       n_folds = 3
     case "SGD":
       min_r=5
@@ -41,27 +43,29 @@ def train(train_file, method):
   rmse = {}
 
   with Progress() as p:
-    t = p.add_task(description = "initialization", total=len(rs), visible=False)
+    t = p.add_task(description = "initialization", total=len(rs)*len(folds), visible=False)
     for r in rs: # tu sprawdzamy dla każdego r
       p.update(t, description=f"r = {r}", refresh=True, visible=True)
       r_rmse = []
       for fold in folds: # tu sprawdzamy po wszystkich foldach
-        p.update(t, advance=1/len(folds)*100)
+        p.update(t, advance=1)
         Z_train = fold['Z_train']
         train_user_map = fold['user_map']
         train_movie_map = fold['movie_map']
         test_df = fold['test_df']
 
-        train_W, train_H = train_fun(Z_train, r) # tu dopasowujemy model na train
+        W_train, H_train = train_fun(Z_train, r) # tu dopasowujemy model na train
+
+        Z_approx_train = np.dot(W_train, H_train)
 
         # tu obliczamy i dodajemy rmse dla foldu
-        r_rmse.append(evaluate_fold(test_df, train_user_map, train_movie_map, train_W, train_H))
+        r_rmse.append(evaluate_fold(test_df, train_user_map, train_movie_map, Z_approx_train))
       
       # tu dodajemy srednie rmse dla r
       rmse[r] = np.mean(r_rmse)
 
   min_rmse = min(rmse.values())
-  best_r = list(rmse.keys)[list(rmse.values()).index(min_rmse)]
+  best_r = list(rmse.keys())[list(rmse.values()).index(min_rmse)]
   print(f"Best r = {best_r} with RMSE = {min_rmse:.4f}")
 
   Z, user_map, movie_map = build_rating_matrix(df, method)
@@ -69,7 +73,8 @@ def train(train_file, method):
   W, H = train_fun(Z, best_r)
   Z_approx = np.dot(W, H)
 
-  return Z_approx, user_map, movie_map
+  return rmse
+  #return Z_approx, user_map, movie_map
 
 def train_NMF_model(Z, r):
   """
@@ -83,41 +88,29 @@ def train_NMF_model(Z, r):
     - W (ndarray): Matrix of size n x r.
     - H (dict): Matrix of size r x d.
   """
-        
-  model = NMF(n_components=r, init='random', random_state=0, max_iter=1000)
-  W = model.fit_transform(Z)
+  
+  with warnings.catch_warnings():
+    warnings.simplefilter("ignore", category=ConvergenceWarning)
+    model = NMF(n_components=r, init='random', random_state=0, max_iter=1000)
+    W = model.fit_transform(Z)
   H = model.components_
 
   return W, H
 
 
-def train_SVD1_model(df, Z):
-  svd = TruncatedSVD(n_components=min(Z.shape)-1, random_state=42)
+def train_SVD1_model(Z, r):
+  svd = TruncatedSVD(n_components=r, random_state=42)
   svd.fit(Z)
 
-  var_expl = np.cumsum(svd.explained_variance_ratio_)
-  r = np.argmax(var_expl >= 0.9) + 1
-  print("Rank (r):", r)
-
-  svd_opt = TruncatedSVD(n_components=r, random_state=42)
-  svd_opt.fit(Z)
-
-  Sigma2 = np.diag(svd_opt.singular_values_)
-  VT = svd_opt.components_
-  W = svd_opt.transform(Z) / svd_opt.singular_values_
+  Sigma2 = np.diag(svd.singular_values_)
+  VT = svd.components_
+  W = svd.transform(Z) / svd.singular_values_
   H = np.dot(Sigma2, VT)
     
   return W, H
 
-def train_SVD2_model(df, Z, max_iter=5, tol=1e-3):
+def train_SVD2_model(Z, r, max_iter=100, tol=1e-3):
     Z_current = Z.copy()
-
-    svd_init = TruncatedSVD(n_components=min(Z.shape) - 1, random_state=42)
-    svd_init.fit(Z)
-
-    var_expl = np.cumsum(svd_init.explained_variance_ratio_)
-    r = np.argmin(var_expl >= 0.9) + 1
-    print("Rank (r):", r)
 
     # zapamiętujemy, gdzie były oryginalne oceny (większe od 0)
     mask = Z > 0
@@ -135,7 +128,10 @@ def train_SVD2_model(df, Z, max_iter=5, tol=1e-3):
         # Zostawiamy oryginalne oceny, w resztę (braki) wstawiamy przewidywania
         Z_current[~mask] = Z_pred[~mask]
 
+        print(diff)
+
         if diff < tol:
+            print("Convergence")
             break
 
     U = svd.transform(Z_current) / svd.singular_values_
@@ -147,7 +143,7 @@ def train_SVD2_model(df, Z, max_iter=5, tol=1e-3):
 
     return W, H
 
-def train_SGD_model(df, Z, optimizer_name = "adam", r_values=list(range(1,50)), test_size=0.1):
+def train_SGD_model_best_r(df, Z, optimizer_name = "adam", r_values=list(range(1,50)), test_size=0.1):
     """
       Take Z, split data to train and test, builds the new rating matrix on training data,
       perform SGD for different values of r, computing RMSE on test data for each r, and returns the best r,
@@ -234,8 +230,8 @@ def train_SGD_model(df, Z, optimizer_name = "adam", r_values=list(range(1,50)), 
     return best_r
 
 
-#def train_sgd_model(df, Z, optimizer_name = "adam", r=3):
-    r = train_sgd_model_best_r(Z, optimizer_name=optimizer_name)
+def train_SGD_model(df, Z, optimizer_name = "adam", r=3):
+    r = train_SGD_model_best_r(Z, optimizer_name=optimizer_name)
     Z_torch = torch.from_numpy(Z)
     n_users, n_movies = Z_torch.shape
 
