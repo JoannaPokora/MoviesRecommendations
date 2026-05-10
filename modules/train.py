@@ -31,6 +31,9 @@ def train(train_file, method):
     case "SGD":
       min_r=1
       max_r=7
+    case "BEST_2":
+      min_r = 2
+      max_r = 10
 
   train_fun = globals()[f"train_{method}_model"] # tu określamy funkcję modelu
 
@@ -200,3 +203,50 @@ def train_BEST_model(Z, svd2_r, nmf_r):
     if diff < tol:
       break
 
+  return W, H
+
+def train_BEST_2_model(Z_nan, r, max_iter=20, tol=1e-5, alpha=0.8):
+  # Zapamiętujemy, gdzie były prawdziwe oceny na podstawie NaN
+  mask = ~np.isnan(Z_nan)
+
+  # Przygotowujemy średnie kolumnowe do wygładzania
+  col_means = np.nanmean(Z_nan, axis=0)
+  global_mean = np.nanmean(Z_nan)
+  col_means = np.nan_to_num(col_means, nan=global_mean)
+
+  # Przygotowujemy do SVD2 macierz startową (NaN zastępujemy zerami)
+  Z_current = np.nan_to_num(Z_nan, nan=0.0)
+
+  prev_rmse = float('inf')
+
+  for i in range(max_iter):
+    svd = TruncatedSVD(n_components=r, random_state=42)
+    W_iter = svd.fit_transform(Z_current)
+    H_iter = svd.components_
+
+    Z_pred = np.dot(W_iter, H_iter)
+
+    # Obliczamy RMSE dla zbieżności
+    rmse = root_mean_squared_error(Z_current, Z_pred)
+    diff = abs(prev_rmse - rmse)
+
+    # Dla brakujących wartości (~mask) mieszamy przewidywanie ze średnimi (ZM)
+    # np.where(~mask) zwraca indeksy wierszy i kolumn dla braków
+    missing_rows, missing_cols = np.where(~mask)
+    target_means = col_means[missing_cols] # Pobieramy odpowiednie średnie dla brakujących kolumn
+
+    # Aktualizujemy wartości brakujące
+    Z_current[~mask] = alpha * Z_pred[~mask] + (1 - alpha) * target_means
+
+    if diff < tol:
+      break
+
+    prev_rmse = rmse
+
+  # Finalny rozkład SVD2
+  U = svd.transform(Z_current) / svd.singular_values_
+  sqrt_lambda = np.diag(np.sqrt(svd.singular_values_))
+  W = np.dot(U, sqrt_lambda)
+  H = np.dot(sqrt_lambda, svd.components_)
+
+  return W, H
