@@ -12,22 +12,13 @@ Example usage:
 conda activate my_ml_project_env
 
 (a) Training the model:
-python main.py --mode train
---train_file data/ratings.csv
---model_path models_trained/model_NMF.pkl
---alg NMF
+python main.py --mode train --train_file data/ratings.csv --model_path models_trained/model_NMF.pkl --alg NMF
 
 (b) Prediction:
-python main.py --mode predict
---input_file data/sample_test.csv
---model_path models_trained/model_NMF.pkl
---output_file results/preds_NMF.csv
---alg NMF
+python main.py --mode predict --input_file data/sample_test.csv --model_path models_trained/model_NMF.pkl --output_file results/preds_NMF.csv --alg NMF
 
 (c) Evaluation
-python tools/evaluate_solution.py
---true_file data/sample_test_with_ratings.csv
---pred_file results/preds_NMF.csv
+python tools/evaluate_solution.py --true_file data/sample_test_with_ratings.csv --pred_file results/preds_NMF.csv
 '''
 
 def parse_arguments():
