@@ -6,6 +6,13 @@ from sklearn.model_selection import KFold
 from .predict import predict
 from sklearn.metrics import mean_squared_error
 
+def impute_with_col_means(Z):
+  col_means = np.nanmean(Z, axis=0)
+  inds = np.where(np.isnan(Z))
+  Z[inds] = np.take(col_means, inds[1])
+
+  return Z
+
 def build_rating_matrix(df, method):
     """
     Reads a ratings CSV file with columns: userId, movieId, rating.
@@ -47,9 +54,7 @@ def build_rating_matrix(df, method):
 
     if method in ["NMF", "SVD1"]:
       # impute missing values with means of movies ratings
-      col_means = np.nanmean(Z, axis=0)
-      inds = np.where(np.isnan(Z))
-      Z[inds] = np.take(col_means, inds[1])
+      Z = impute_with_col_means(Z)
     elif method in ["SVD2"]:
       # impute missing values with zeros
       Z[np.isnan(Z)] = 0
