@@ -7,6 +7,16 @@ from .predict import predict
 from sklearn.metrics import mean_squared_error
 
 def impute_with_col_means(Z):
+  """
+  Imputes a matrix with column means.
+
+  Parameters:
+    - Z (ndarray): Matrix to impute.
+
+  Returns:
+    - Z (ndarray): Imputed matrix.
+  """
+
   col_means = np.nanmean(Z, axis=0)
   inds = np.where(np.isnan(Z))
   Z[inds] = np.take(col_means, inds[1])
@@ -15,14 +25,15 @@ def impute_with_col_means(Z):
 
 def build_rating_matrix(df, method):
     """
-    Reads a ratings CSV file with columns: userId, movieId, rating.
+    Takes the train dataframe with columns: userId, movieId, rating.
     Builds and returns the user–movie matrix Z, along with mappings
     from userId to row index and movieId to column index.
-    If method is specified as nmf or svd1, missing entries are imputed
-    with the mean of movie ratings.
+    If method is specified as 'NMF' or 'SVD1', missing entries are imputed
+    with the mean of movie ratings. For method 'SVD2', they are filled
+    with zeros. For other methods, missing entries are nan.
 
     Parameters:
-      - train_file (str): Path to the training CSV file.
+      - df (ndarray): Train dataframe.
       - method (str): Model name.
 
     Returns:
@@ -65,6 +76,19 @@ def build_rating_matrix(df, method):
     return Z, user_map, movie_map
 
 def create_cv_folds(df, n_splits, method):
+  """
+  Splits the training dataframe into 'n_splits' folds
+  for cross-validation.
+
+  Parameters:
+    - df (ndarray): Train dataframe.
+    - n_splits (int): Number of folds.
+    - method (str): Model name.
+
+  Returns:
+    - folds (dict):
+  """
+
   kf = KFold(n_splits, shuffle=True, random_state=42)
 
   folds = []
@@ -76,7 +100,6 @@ def create_cv_folds(df, n_splits, method):
     Z_train, user_map, movie_map = build_rating_matrix(train_df, method)
     
     folds.append({
-        'fold_idx': fold + 1,
         'test_df': test_df, 
         'Z_train': Z_train,
         'user_map': user_map,
