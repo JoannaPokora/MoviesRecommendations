@@ -247,6 +247,8 @@ def train_SGD_model(Z, r, optimizer_name = "adam", loss_type = "sq_frob", lam = 
     - W (ndarray): Matrix of size n x r.
     - H (dict): Matrix of size r x p.
   """
+
+  torch.manual_seed(42)
   
   # initialize torch matrix
   Z_torch = torch.from_numpy(Z)
