@@ -221,6 +221,6 @@ def train_NMF_V2_model(Z_nan, r):
   Z_prim = np.dot(W, H)
   Z_prim[mask] = Z[mask]
 
-  W, H = train_NMF_model(Z_prim, r/2)
+  W, H = train_NMF_model(Z_prim, round(r/2))
 
   return W, H
