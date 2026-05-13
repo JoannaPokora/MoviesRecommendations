@@ -29,11 +29,14 @@ def train(train_file, method):
       data frame to matrix Z.
   """
 
+  # read train file
   df = pd.read_csv(train_file)
 
+  # BEST = SVD2
   if method == "BEST":
     method = "SVD2"
 
+  # set r bounds and lambda if method=SVD2_V2
   match method:
     case "NMF":
       min_r = 7
@@ -58,47 +61,60 @@ def train(train_file, method):
       min_r=7
       max_r=40
 
+  # set training function
   if method == "SGD_REG":
     train_fun = train_SGD_model
   else:
-    train_fun = globals()[f"train_{method}_model"] # tu określamy funkcję modelu
+    train_fun = globals()[f"train_{method}_model"]
 
-  folds = create_cv_folds(df, 5, method) # tu tworzymy foldy
+  # create folds
+  folds = create_cv_folds(df, 5, method)
 
+  # create r range and (r, lambda) pairs if method=SVD2_V2
   rs = range(min_r, max_r + 1)
   if method == "SGD_REG":
     rs = [(r, l) for r in rs for l in lam]
 
   rmse = {}
 
+  # train loop with different r values and cross-validation
   with Progress() as p:
+    # add progress bar
     t = p.add_task(description = "initialization", total=len(rs)*len(folds), visible=False)
-    for r in rs: # tu sprawdzamy dla każdego r
+
+    # train with single r
+    for r in rs:
+      # update progress bar
       if method == "SGD_REG":
         p.update(t, description=f"Training with r={r[0]} and lambda={r[1]}", refresh=True, visible=True)
       else:
         p.update(t, description=f"Training with r={r}", refresh=True, visible=True)
+
       r_rmse = []
-      for fold in folds: # tu sprawdzamy po wszystkich foldach
+
+      # cross-validation
+      for fold in folds:
         p.update(t, advance=1)
         Z_train = fold['Z_train']
         train_user_map = fold['user_map']
         train_movie_map = fold['movie_map']
         test_df = fold['test_df']
 
+        # fit model
         if method == "SGD_REG":
-          W_train, H_train = train_fun(Z_train, r[0], loss_type = "reg", lam = r[1]) # tu dopasowujemy model na train
+          W_train, H_train = train_fun(Z_train, r[0], loss_type = "reg", lam = r[1])
         else:
-          W_train, H_train = train_fun(Z_train, r) # tu dopasowujemy model na train
+          W_train, H_train = train_fun(Z_train, r)
 
         Z_approx_train = np.dot(W_train, H_train)
 
-        # tu obliczamy i dodajemy rmse dla foldu
+        # calculate RMSE on test fold
         r_rmse.append(evaluate_fold(test_df, train_user_map, train_movie_map, Z_approx_train))
       
-      # tu dodajemy srednie rmse dla r
+      # add mean RMSE for single r
       rmse[r] = np.mean(r_rmse)
 
+  # get the best r or (r, lambda) for SVD2_V2
   min_rmse = min(rmse.values())
   best_r = list(rmse.keys())[list(rmse.values()).index(min_rmse)]
   if method == "SGD_REG":
@@ -106,14 +122,18 @@ def train(train_file, method):
   else:
     print(f"Best r={best_r} with RMSE = {min_rmse:.4f}")
 
+  # get full data matrix
   Z, user_map, movie_map = build_rating_matrix(df, method)
 
+  # train on full data matrix
   if method in ("SVD2", "SVD2_V2"):
     W, H = train_fun(Z, best_r, max_iter = 1000)
   elif method == "SGD_REG":
     W, H = train_fun(Z, best_r[0], loss_type = "reg", lam = best_r[1])
   else:
     W, H = train_fun(Z, best_r)
+
+  # get approximation
   Z_approx = np.dot(W, H)
 
   return Z_approx, user_map, movie_map, rmse
@@ -131,6 +151,7 @@ def train_NMF_model(Z, r):
     - H (dict): Matrix of size r x p.
   """
   
+  # ido not print warnings
   with warnings.catch_warnings():
     warnings.simplefilter("ignore", category=ConvergenceWarning)
     model = NMF(n_components=r, init='nndsvd', random_state=42, max_iter=1000)
@@ -168,7 +189,7 @@ def train_SVD2_model(Z, r, max_iter=20, tol=1e-6, mask = None):
     - r (int): Rank parameter.
     - max_iter (int): Maximum number of iterations.
     - tol (float): Stopping criterion value.
-    - mask (): Positions of initially missing entries,
+    - mask (ndarray): Positions of initially missing entries,
       used with SVD_V2.
 
   Returns:
@@ -178,12 +199,14 @@ def train_SVD2_model(Z, r, max_iter=20, tol=1e-6, mask = None):
 
   Z_current = Z.copy()
 
+  # remember the positions of known ratings
   if mask is None:
-    # zapamiętujemy, gdzie były oryginalne oceny (większe od 0)
     mask = Z > 0
 
+  # set initial RMSE as infinity
   prev_rmse = float('inf')
 
+  # perform SVD2 loop
   for i in range(max_iter):
     svd = TruncatedSVD(n_components=r, random_state=42)
     W_iter = svd.fit_transform(Z_current)
@@ -191,14 +214,15 @@ def train_SVD2_model(Z, r, max_iter=20, tol=1e-6, mask = None):
 
     Z_pred = np.dot(W_iter, H_iter)
 
-    # obliczamy zmianę (czy zbiegamy do punktu stałego)
+    # calculate difference between RMSE values
     rmse = root_mean_squared_error(Z_current[mask], Z_pred[mask])
     diff = prev_rmse - rmse
     prev_rmse = rmse
 
-    # Zostawiamy oryginalne oceny, w resztę (braki) wstawiamy przewidywania
+    # impute missing values
     Z_current[~mask] = Z_pred[~mask]
 
+    # if difference small - break for
     if diff < tol:
       break
 
@@ -224,16 +248,18 @@ def train_SGD_model(Z, r, optimizer_name = "adam", loss_type = "sq_frob", lam = 
     - H (dict): Matrix of size r x p.
   """
   
+  # initialize torch matrix
   Z_torch = torch.from_numpy(Z)
   n_users, n_movies = Z_torch.shape
 
-  mask = ~torch.isnan(Z_torch)  # Maska dla znanych ocen
+  # remember the positions of known ratings
+  mask = ~torch.isnan(Z_torch)
 
-  av_rating = torch.nanmean(Z_torch)
-
+  # create W and H torch matrices
   W = torch.randn((n_users, r), requires_grad=True)
   H = torch.randn((r, n_movies), requires_grad=True)
 
+  # set optimizer
   if optimizer_name == "adam":
     optimizer = torch.optim.Adam([W, H], lr=0.01)
   elif optimizer_name == "sgd":
@@ -241,12 +267,15 @@ def train_SGD_model(Z, r, optimizer_name = "adam", loss_type = "sq_frob", lam = 
   else:
     raise ValueError("Unsupported optimizer. Choose 'sgd' or 'adam'.")
 
+  # perform SGD
   for epoch in range(1000):
     optimizer.zero_grad()
 
+    # predict Z
     Z_pred = torch.matmul(W, H)
-    sum_sq_diff = torch.sum(torch.pow(Z_torch[mask] - Z_pred[mask], 2))
 
+    # calculate loss
+    sum_sq_diff = torch.sum(torch.pow(Z_torch[mask] - Z_pred[mask], 2))
     if loss_type == "reg":
       reg = lam * (torch.sum(torch.pow(W, 2)) + torch.sum(torch.pow(H, 2)))
       loss = sum_sq_diff + reg
@@ -272,10 +301,13 @@ def train_SVD2_V2_model(Z_nan, r, max_iter=20, tol=1e-6):
     - W (ndarray): Matrix of size n x r.
     - H (dict): Matrix of size r x p.
   """
+  # remember the positions of known ratings
+  mask = ~np.isnan(Z_nan)
 
-  mask = ~np.isnan(Z)
+  # impute matrix with column means
   Z = impute_with_col_means(Z_nan)
 
+  # perform SVD2
   W, H = train_SVD2_model(Z, r, max_iter=max_iter, tol=tol, mask = mask)
 
   return W, H
@@ -295,15 +327,20 @@ def train_NMF_V2_model(Z_nan, r):
     - H (dict): Matrix of size r x p.
   """
 
+  # remember the positions of known ratings
   mask = ~np.isnan(Z_nan)
 
+  # impute matrix with column means
   Z = impute_with_col_means(Z_nan.copy())
 
+  # perform NMF first time
   W, H = train_NMF_model(Z, r)
 
+  # impute missing ratings
   Z_prim = np.dot(W, H)
   Z_prim[mask] = Z[mask]
 
+  # perform NMF second time
   W, H = train_NMF_model(Z_prim, round(r/2))
 
   return W, H
