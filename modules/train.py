@@ -136,7 +136,7 @@ def train(train_file, method):
   # get approximation
   Z_approx = np.dot(W, H)
 
-  return Z_approx, user_map, movie_map, rmse
+  return Z_approx, user_map, movie_map
 
 def train_NMF_model(Z, r):
   """
