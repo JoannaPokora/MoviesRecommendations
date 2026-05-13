@@ -53,7 +53,7 @@ def train(train_file, method):
       lam = np.round(np.linspace(0.4, 0.8, 5), 1)
     case "SVD2_V2":
       min_r=2
-      max_r=10
+      max_r=40
     case "NMF_V2":
       min_r=7
       max_r=40
@@ -273,7 +273,7 @@ def train_SVD2_V2_model(Z_nan, r, max_iter=20, tol=1e-6):
     - H (dict): Matrix of size r x p.
   """
 
-  mask = ~np.isnan(Z)
+  mask = ~np.isnan(Z_nan)
   Z = impute_with_col_means(Z_nan)
 
   W, H = train_SVD2_model(Z, r, max_iter=max_iter, tol=tol, mask = mask)
