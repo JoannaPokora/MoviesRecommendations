@@ -53,7 +53,7 @@ def train(train_file, method):
       lam = np.round(np.linspace(0.4, 0.8, 5), 1)
     case "SVD2_V2":
       min_r=2
-      max_r=40
+      max_r=10
     case "NMF_V2":
       min_r=7
       max_r=40
