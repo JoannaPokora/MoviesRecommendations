@@ -41,8 +41,8 @@ def parse_arguments():
                         default="results/preds.csv",
                         help="Where to save predictions.")
 
-    parser.add_argument("--alg", type=str,   required=True,
-                        help="Algorithm to use (NMF, SVD1, SVD2, SGD or BEST.")
+    parser.add_argument("--alg", type=str, required=True,
+                        help="Algorithm to use (NMF, SVD1, SVD2, SGD, BEST, SVD2_V2, NMF_V2 or SGD_REG).")
 
     return parser.parse_args()
 
@@ -52,8 +52,9 @@ def main():
     mode = args.mode.lower()
     alg = args.alg.upper()
 
-    if alg not in ["NMF", "SVD1", "SVD2", "SGD", "BEST"]:
-        print("--alg must be one of: NMF, SVD1, SVD2, SGD, BEST")
+    if alg not in ["NMF", "SVD1", "SVD2", "SGD", "BEST", "SVD_V2", "NMF_V2", "SGD_REG"]:
+        print(f"alg = {repr(alg)}")
+        print("--alg must be one of: NMF, SVD1, SVD2, SGD, BEST, SVD_V2, NMF_V2, SGD_REG")
         return
 
     if mode == "train":
